@@ -1,0 +1,24 @@
+{
+  "persons": [
+    {
+      "name": "Bill Gates",
+      "number": "+1-206-555-0193",
+      "id": "1"
+    },
+    {
+      "name": "Elon Musk",
+      "number": "+1-310-555-4242",
+      "id": "2"
+    },
+    {
+      "name": "Mark Zuckerberg",
+      "number": "+1-650-555-8080",
+      "id": "3"
+    },
+    {
+      "name": "Jeff Bezos",
+      "number": "+1-206-555-2121",
+      "id": "4"
+    }
+  ]
+}

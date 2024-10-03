@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect} from 'react';
+import axios from 'axios';
+import personsService from './services/persons';
+import timeout from './services/apiHelpers';
 
 const Filter = ({ value, onChange }) => (
   <div>
@@ -20,47 +23,100 @@ const PersonForm = ({ onSubmit, newName, newPhoneNumber, handleNameChange, handl
   </form>
 );
 
-const Persons = ({ persons }) => (
+const Persons = ({ persons, onDelete }) => (
   <ul>
     {persons.map(person => (
       <li key={person.id}>
         {person.name} {person.number}
+        <button onClick={() => onDelete(person.id)}>Delete</button>
       </li>
     ))}
   </ul>
 );
 
+const Notification = ({ message, type }) => {
+  if (!message || !type) {
+    return null;
+  }
+
+  const className = type === 'success' ? 'success' : 'error';
+
+  return (
+    <div className={className}>
+      {message}
+    </div>
+  );
+};
+
+
 const App = () => {
-  const [persons, setPersons] = useState([
-    { name: 'Arto Hellas', number: '040-123456', id: 1 },
-    { name: 'Ada Lovelace', number: '39-44-5323523', id: 2 },
-    { name: 'Dan Abramov', number: '12-43-234345', id: 3 },
-    { name: 'Mary Poppendieck', number: '39-23-6423122', id: 4 }
-  ]);
+  const [persons, setPersons] = useState([])
+
+  useEffect(() => {
+    console.log('effect')
+    axios
+      .get('http://localhost:3001/persons')
+      .then(response => {
+        console.log('promise fulfilled')
+        setPersons(response.data.map(person => ({...person, key: person.id})))
+      })
+  }, [])
+  console.log('render', persons.length, 'persons')
   
   const [newName, setNewName] = useState('');
   const [newPhoneNumber, setNewPhoneNumber] = useState('');
   const [newFilter, setNewFilter] = useState('');
+  const [message, setNotificationMessage] = useState('')
 
   const addEntry = (event) => {
     event.preventDefault();
-
-    if (persons.some(person => person.name.toLowerCase() === newName.toLowerCase())) {
-      alert(`${newName} is already added to the phonebook`);
-      return;
+  
+    const existingPerson = persons.find(person => person.name.toLowerCase() === newName.toLowerCase());
+  
+    if (existingPerson) {
+      if (window.confirm(`${newName} is already added to the phonebook, replace the old number with a new one?`)) {
+        const updatedPerson = { ...existingPerson, number: newPhoneNumber }; 
+    
+        timeout(5000, personsService
+          .update(existingPerson.id, updatedPerson) 
+          .then(response => {
+            setPersons(persons.map(person => (person.id === existingPerson.id ? response.data : person)));
+            setNewName('');
+            setNewPhoneNumber('');
+            setNotificationMessage(newName ? `Added ${newName}` : null, 'success');
+            setTimeout(() => setNotificationMessage(null, 'null'), 5000); // Clear the message after 5 seconds
+          })
+          .catch(error => {
+            console.error(`Error updating the person with ID ${existingPerson.id}:`, error);
+            setNotificationMessage(newName ? `Error updating ${newName}: ${error.message}` : null, 'error');
+            setTimeout(() => setNotificationMessage(null, 'null'), 5000); // Clear the message after 5 seconds
+          }));
+      }
+      return; 
     }
-
+  
     const newPerson = {
       name: newName,
       number: newPhoneNumber,
-      id: persons.length + 1 // Incrementing ID based on length
+      id: (Math.max(...persons.map(person => parseInt(person.id))) + 1).toString()
     };
-
-    setPersons(persons.concat(newPerson));
-    setNewName('');
-    setNewPhoneNumber('');
+  
+    timeout(5000, personsService
+      .create(newPerson)
+      .then(response => {
+        setPersons(persons.concat(response.data));
+        setNewName('');
+        setNewPhoneNumber('');
+        setNotificationMessage(newName ? `Added ${newName}` : null, 'success');
+        setTimeout(() => setNotificationMessage(null, 'null'), 5000); // Clear the message after 5 seconds
+      })
+      .catch(error => {
+        console.error(`Error creating a new person:`, error);
+        setNotificationMessage(newName ? `Error updating ${newName}: ${error.message}` : null, 'error');
+        setTimeout(() => setNotificationMessage(null, 'null'), 5000); // Clear the message after 5 seconds
+      }));
   };
-
+ 
   const handleNameChange = (event) => {
     setNewName(event.target.value);
   };
@@ -77,9 +133,26 @@ const App = () => {
     person.name.toLowerCase().includes(newFilter.toLowerCase())
   );
 
+  const deletePerson = (id) => {
+    if (window.confirm(`Delete ${id}?`)) {
+      personsService
+        .remove(id)
+        .then(() => {
+          setPersons(persons.filter(person => person.id !== id));
+        })
+        .catch(error => {
+          console.error(`Error deleting person with ID ${id}:`, error);
+        });
+    }
+  };
+
   return (
     <div>
       <h2>Phonebook</h2>
+
+      {message !== null && (
+        <Notification message={message} type={message ? 'success' : 'error'} />
+      )}
       
       <Filter value={newFilter} onChange={handleFilterChange} />
       
@@ -95,7 +168,7 @@ const App = () => {
 
       <h2>Numbers</h2>
 
-      <Persons persons={filteredPersons} />
+      <Persons persons={filteredPersons} onDelete={deletePerson} />
     </div>
   );
 };
